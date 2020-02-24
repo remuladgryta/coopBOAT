@@ -21,17 +21,11 @@
 </style>
 </head>
 <body>
-Opponent's board: 
 <div id="opponentBoard"></div>
-Your board:
-<div id="ownBoard"></div>
-<div id="boatsPane" style="display:grid; grid-template-columns: 1fr 1fr 1fr;"></div>
 <hr/>
 <div id="settings_pane">
 <label>Columns: <input id="columns" type="number" min="1"/></label>
 <label>Pokémon: <input id="pokemon" type="text" title="Comma separated list of either specific dex numbers or dex number ranges. E.g. 1-3,152-154,64,128"/></label>
-<label>BOATs: <input id="boats" type="number" min="1"/></label>
-<label>Manual confirmation: <input id="manual" type="checkbox"/></label>
 </div>
 <hr/>
 <div id="connectPane">
@@ -43,8 +37,6 @@ Your board:
     var settings = {
         columns: 21,
         pokemon: "1-251",
-        boats: 5,
-        manual: false,
     };
     let peer = new Peer();
     let activeConnection = null;
@@ -71,9 +63,6 @@ Your board:
             document.querySelector("#connectPane").hidden = false;
         });
         conn.on('data', function(data){
-            //If you are reading this, I'm sorry. This code is awful.
-            console.log(data);
-            let tile;
             switch(data.type){
                 case "settings":
                     if(JSON.stringify(data.settings) !== JSON.stringify(settings)){
@@ -83,46 +72,9 @@ Your board:
                     }
                     console.log("recieved settings", data.settings);
                     break;
-                case "shoot":
-                    tile = document.querySelector('#ownBoard img[data-mon="'+ data.id +'"]');
-                    
-                    if(tile.classList.contains('ownBoat')){
-                        tile.classList.add('hit');
-                        if(!settings.manual){
-                            conn.send({type:'hit', id:data.id});
-                            for(let boatText of document.querySelectorAll('.boatText')){
-                                let boatArr = JSON.parse(boatText.value);
-                                if(shouldSink(boatArr)){
-                                    conn.send({type:'sink', ids:boatArr});
-                                    for(let id of boatArr){
-                                        let tile = document.querySelector('#ownBoard img[data-mon="'+ id +'"]');
-                                        tile.classList.add('sunk');
-                                    }
-                                }
-                            }
-                        }
-                    }else{
-                        tile.classList.add('miss');
-                        if(!settings.manual){
-                            conn.send({type:'miss', id:data.id});
-                        }
-                    }
-                    break;
-                case "unshoot":
-                    tile = document.querySelector('#ownBoard img[data-mon="'+ data.id +'"]');
-                    tile.classList.remove('hit');
-                    tile.classList.remove('miss');
-                    break;
-                case "hit":
-                case "miss":
-                    tile = document.querySelector('#opponentBoard img[data-mon="'+ data.id +'"]');
-                    tile.classList.add(data.type);
-                    break;
-                case "sink":
-                    for(let id of data.ids){
-                        tile = document.querySelector('#opponentBoard img[data-mon="'+ id +'"]');
-                        tile.classList.add('sunk');
-                    }
+                case "mark":
+                    let tile = document.querySelector('#opponentBoard img[data-mon="'+ data.id +'"]');
+                        tile.setAttribute('data-clicks', data.mark);
                     break;
                 default:
                     conn.close();
@@ -134,7 +86,7 @@ Your board:
         onConnection(peer.connect(document.querySelector('#jointext').value));
     }
     
-    function setupBoards(){
+    function setupBoard(){
         let tokens = settings.pokemon.split(',').filter(token => token.length > 0);
         let pokemon = [];
         for(let token of tokens){
@@ -154,48 +106,19 @@ Your board:
             }
         }
         
-        function setupBoard(board){
-            while(board.firstChild){
-                board.removeChild(board.firstChild);
-            }
-            board.style = "display: grid; grid-template-columns: repeat(" + settings.columns + ", 38px);";
-            for(let mon of pokemon){
-                let tile = document.createElement('img');
-                tile.src = "empty.png";
-                tile.style = `background-image: url(pokes.png); background-position: 0 -${(mon-1)*30}px; width:40px; height:30px; `;
-                tile.setAttribute('data-mon', mon);
-                tile.setAttribute('data-clicks', 0);
-                board.appendChild(tile);
-            }
+        let board = document.querySelector('#opponentBoard');
+        while(board.firstChild){
+            board.removeChild(board.firstChild);
         }
-        let ownBoard = document.querySelector('#ownBoard');
-        let opponentBoard = document.querySelector('#opponentBoard');
-
-        setupBoard(ownBoard);
-        setupBoard(opponentBoard);
-    }
-    
-    function setupBoats(){
-        let boatsPane = document.querySelector("#boatsPane");
-        while(boatsPane.firstChild){
-            boatsPane.removeChild(boatsPane.firstChild);
+        board.style = "display: grid; grid-template-columns: repeat(" + settings.columns + ", 38px);";
+        for(let mon of pokemon){
+            let tile = document.createElement('img');
+            tile.src = "empty.png";
+            tile.style = `background-image: url(pokes.png); background-position: 0 -${(mon-1)*30}px; width:40px; height:30px; `;
+            tile.setAttribute('data-mon', mon);
+            tile.setAttribute('data-clicks', 0);
+            board.appendChild(tile);
         }
-        for(let i=1; i<=settings.boats; i++){
-            boatsPane.innerHTML += (
-                '<div><input type="radio" checked="true" name="boat" id="boat'+i+'" class="boatRadio"/>' +
-                '<label for="boat'+i+'">BOAT '+i+' </label>' +
-                '<input type="text" id="boatIDs'+i+'" value="[]" class="boatText"/></div>'
-            );
-        }
-        
-    }
-
-    function shouldSink(boatArr){
-        return boatArr.length && boatArr.every(
-            function(id){
-                let tile = document.querySelector('#ownBoard img[data-mon="'+ id +'"]');
-                return tile.classList.contains('hit') && !tile.classList.contains('sunk');
-            });
     }
 
     let suppressSettingEvents = false;
@@ -213,8 +136,7 @@ Your board:
         }
         suppressSettingEvents = false;
         
-        setupBoards();
-        setupBoats();
+        setupBoard();
     }
     
     function onSettingsEvent(e){
@@ -237,50 +159,20 @@ Your board:
             }
         }
     }
-    
-    function onOwnBoardEvent(e){
-        if(e.target.tagName == 'IMG'){
-            let tile = e.target;
-            if (tile.classList.contains("ownBoat")){
-                let boatText = document.querySelector('#boatIDs'+tile.getAttribute('data-boat'));
-                let boatArr = JSON.parse(boatText.value);
-                boatArr.splice(boatArr.indexOf(tile.getAttribute('data-mon')),1);
-                boatText.value = JSON.stringify(boatArr);
-                tile.removeAttribute('data-boat');
-            }else{
-                let selectedBoatText = document.querySelector('input[name="boat"]:checked ~ input');
-                let selectedBoatArr = JSON.parse(selectedBoatText.value);
-                tile.setAttribute('data-boat', selectedBoatText.id.split("boatIDs").pop());
-                selectedBoatArr.push(tile.getAttribute('data-mon'));
-                selectedBoatText.value = JSON.stringify(selectedBoatArr);
-            }
-            tile.classList.toggle('ownBoat');
-        }
-    }
 
     function onOpponentBoardEvent(e){
         if(e.target.tagName == 'IMG'){
             e.preventDefault();
             e.stopImmediatePropagation();
             if(e.button == 0){//left click
-                activeConnection.send({type:'shoot', id:e.target.getAttribute('data-mon')});
-                if(settings.manual){
-                    e.target.setAttribute('data-clicks', Math.min(parseInt(e.target.getAttribute('data-clicks')) + 1, 3));
-                }
+                e.target.setAttribute('data-clicks', Math.min(parseInt(e.target.getAttribute('data-clicks')) + 1, 3));
             }else if(e.button == 2){//right click
-                if(settings.manual){
-                    e.target.setAttribute('data-clicks', Math.max(parseInt(e.target.getAttribute('data-clicks')) - 1, 0));
-                    if(e.target.getAttribute('data-clicks') == 0){
-                        activeConnection.send({type:'unshoot', id:e.target.getAttribute('data-mon')});
-                    }
-                }else{
-                    activeConnection.send({type:'unshoot', id:e.target.getAttribute('data-mon')});
-                }
+                e.target.setAttribute('data-clicks', Math.max(parseInt(e.target.getAttribute('data-clicks')) - 1, 0));
             }
+            activeConnection.send({type:'mark', id:e.target.getAttribute('data-mon'), mark:e.target.getAttribute('data-clicks')});
         }
     }
     onSettings(settings);
-    document.querySelector('#ownBoard').addEventListener('click', onOwnBoardEvent);
     document.querySelector('#opponentBoard').addEventListener('mouseup', onOpponentBoardEvent);
     document.querySelector('#opponentBoard').addEventListener('contextmenu', e => e.preventDefault());
     document.querySelector('#joinbutton').addEventListener('click', onJoin);
