@@ -45,7 +45,8 @@
         pokemon: "1-251",
     };
     let peer = new Peer();
-    let activeConnection = null;
+    let isHost = true;
+    let activeConnections = [];
     peer.on('open', function(peerID){
         document.querySelector("#peerID").value=peerID;
     });
@@ -57,18 +58,27 @@
     });
     
     function onConnection(conn){
-        console.log("Connected");
-        activeConnection = conn;
+        console.log(conn);
+        activeConnections.push(conn);
         conn.on('open', function(){
             document.querySelector("#connectPane").hidden = true;
         });
         conn.on('close', function(){
-            document.querySelector("#connectPane").hidden = false;
+            activeConnections.splice(activeConnections.indexOf(conn),1);
+            if(!isHost || activeConnections.length == 0) document.querySelector("#connectPane").hidden = false;
+            isHost = true;
         });
         conn.on('error', function(){
-            document.querySelector("#connectPane").hidden = false;
+            activeConnections.splice(activeConnections.indexOf(conn),1);
+            if(!isHost || activeConnections.length == 0) document.querySelector("#connectPane").hidden = false;
+            isHost = true;
         });
         conn.on('data', function(data){
+            if(isHost) {
+              activeConnections.forEach(c => {
+                c.send(data);
+              });
+            }
             switch(data.type){
                 case "settings":
                     if(JSON.stringify(data.settings) !== JSON.stringify(settings)){
@@ -89,6 +99,7 @@
     }
     
     function onJoin(){
+        isHost = false;
         onConnection(peer.connect(document.querySelector('#jointext').value));
     }
     
@@ -155,7 +166,7 @@
             }
             onSettings(newSettings);
             try{
-                activeConnection.send({type:"settings", settings:newSettings});
+                activeConnections.forEach(c => c.send({type:"settings", settings:newSettings}));
             }catch(ex){
                 if(ex instanceof TypeError){
                 
@@ -175,7 +186,7 @@
             }else if(e.button == 2){//right click
                 e.target.setAttribute('data-clicks', Math.max(parseInt(e.target.getAttribute('data-clicks')) - 1, -2));
             }
-            activeConnection.send({type:'mark', id:e.target.getAttribute('data-mon'), mark:e.target.getAttribute('data-clicks')});
+            activeConnections.forEach(c => c.send({type:'mark', id:e.target.getAttribute('data-mon'), mark:e.target.getAttribute('data-clicks')}));
         }
     }
     onSettings(settings);
