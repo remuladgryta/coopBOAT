@@ -54,6 +54,12 @@
         onConnection(conn);
         conn.on('open', function(){
             conn.send({type:'settings', settings});
+            document.querySelectorAll('#opponentBoard img').forEach(
+                tile => conn.send({
+                    type:'mark', id:tile.getAttribute('data-mon'),
+                    mark:tile.getAttribute('data-clicks')
+                })
+            );
         });
     });
     
