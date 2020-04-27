@@ -33,6 +33,7 @@
 <label>Columns: <input id="columns" type="number" min="1"/></label>
 <label>Pokémon: <input id="pokemon" type="text" title="Comma separated list of either specific dex numbers or dex number ranges. E.g. 1-3,152-154,64,128"/></label>
 </div>
+<label for="presets">Presets:</label> <select id="presets"></select>
 <hr/>
 <div id="connectPane">
     <div><button id="joinbutton">Join</button><input id="jointext" type="text"/></div>
@@ -195,6 +196,30 @@
             activeConnections.forEach(c => c.send({type:'mark', id:e.target.getAttribute('data-mon'), mark:e.target.getAttribute('data-clicks')}));
         }
     }
+
+    function setupPresets(){
+        let presets = {};
+        let presetSelect = document.querySelector('#presets');
+        fetch('presets.json')
+        .then((resp) => resp.json())
+        .then(function(data){
+            presets = data;
+            for(let preset in presets){
+                let option = document.createElement("option");
+                option.text = preset;
+                presetSelect.add(option);
+            }
+        })
+        function onPresetEvent(e){
+            let mons = document.querySelector('#pokemon');
+            mons.value = presets[e.target.value];
+            let evt = new Event('change', {bubbles:true, cancelable:true});
+            mons.dispatchEvent(evt);
+        }
+        presetSelect.addEventListener('change', onPresetEvent);
+    }
+
+    setupPresets();
     onSettings(settings);
     document.querySelector('#opponentBoard').addEventListener('mouseup', onOpponentBoardEvent);
     document.querySelector('#opponentBoard').addEventListener('contextmenu', e => e.preventDefault());
