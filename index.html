@@ -134,11 +134,11 @@
         while(board.firstChild){
             board.removeChild(board.firstChild);
         }
-        board.style = "display: grid; grid-template-columns: repeat(" + settings.columns + ", 38px);";
+        board.style = "display: grid; grid-template-columns: repeat(" + settings.columns + ", 40px);";
         for(let mon of pokemon){
             let tile = document.createElement('img');
-            tile.src = "empty.png";
-            tile.style = `background-image: url(pokes.png); background-position: 0 -${(mon-1)*30}px; width:40px; height:30px; `;
+            tile.src = "pokes.png";
+            tile.style = `object-position: 0 -${(mon-1)*30}px; object-fit: none; width:40px; height:30px;`;
             tile.setAttribute('data-mon', mon);
             tile.setAttribute('data-clicks', 0);
             board.appendChild(tile);
