@@ -57,6 +57,9 @@
     let peer = new Peer(peerConfig);
     let isHost = true;
     let activeConnections = [];
+    peer.on('error', function(err) {
+        console.log("Error: ", err);
+    });
     peer.on('open', function(peerID){
         document.querySelector("#peerID").value=peerID;
     });
