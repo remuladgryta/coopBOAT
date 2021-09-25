@@ -35,15 +35,22 @@
 </div>
 <label for="presets">Presets:</label> <select id="presets"></select>
 <hr/>
+<div id="displayNamePane">
+  <div><input id="displaynamebuton" type="button" value="Set/Send Display Name"><input type="text" id="displaynametext"> Your current display name is (if empty, your display name is your id): <input id="displaynameoutput" readonly></input></div>
+</div>
 <div id="connectPane">
     <div><button id="joinbutton">Join</button><input id="jointext" type="text"/></div>
     <div>Your id is:<input id="peerID" readonly/></div>
+</div>
+<div id="connectedNamesPane" hidden>
+  Connected users:
+  <ul id="connectedNamesList"></ul>
 </div>
 <script>
 (function(){'use strict';
     var settings = {
         columns: 21,
-        pokemon: "1-251",
+        pokemon: "1-251"
     };
     const peerConfig = {
         secure: true,
@@ -58,11 +65,14 @@
     let peer = new Peer(peerConfig);
     let isHost = true;
     let activeConnections = [];
+    let connectedDisplayNames = []; // should remain parallel to activeConnections
+    let displayName = "";  // empty display name = display name is your peerID
     peer.on('error', function(err) {
         console.log("Error: ", err);
     });
     peer.on('open', function(peerID){
         document.querySelector("#peerID").value=peerID;
+        updateDisplayNameText();
     });
     peer.on('connection', function(conn){
         onConnection(conn);
@@ -80,16 +90,24 @@
     function onConnection(conn){
         console.log(conn);
         activeConnections.push(conn);
+        connectedDisplayNames.push(conn.metadata.displayName);
+        updateConnectedNames();
         conn.on('open', function(){
             document.querySelector("#connectPane").hidden = true;
         });
         conn.on('close', function(){
-            activeConnections.splice(activeConnections.indexOf(conn),1);
+            const idx = activeConnections.indexOf(conn);
+            activeConnections.splice(idx,1);
+            connectedDisplayNames.splice(idx,1);
+            updateConnectedNames();
             if(!isHost || activeConnections.length == 0) document.querySelector("#connectPane").hidden = false;
             isHost = true;
         });
         conn.on('error', function(){
-            activeConnections.splice(activeConnections.indexOf(conn),1);
+            const idx = activeConnections.indexOf(conn);
+            activeConnections.splice(idx,1);
+            connectedDisplayNames.splice(idx,1);
+            updateConnectedNames();
             if(!isHost || activeConnections.length == 0) document.querySelector("#connectPane").hidden = false;
             isHost = true;
         });
@@ -108,6 +126,11 @@
                     }
                     console.log("recieved settings", data.settings);
                     break;
+                case "namechange":
+                    const connindex = activeConnections.indexOf(conn);
+                    connectedDisplayNames[activeConnections.indexOf(conn)] = data.name;
+                    updateConnectedNames();
+                    break;
                 case "mark":
                     let tile = document.querySelector('#opponentBoard img[data-mon="'+ data.id +'"]');
                         tile.setAttribute('data-clicks', data.mark);
@@ -120,7 +143,9 @@
     
     function onJoin(){
         isHost = false;
-        onConnection(peer.connect(document.querySelector('#jointext').value));
+        onConnection(peer.connect(document.querySelector('#jointext').value, 
+                                  {metadata: { displayName: displayName || document.querySelector("#peerID").value }}
+                                 ));
     }
     
     function setupBoard(){
@@ -232,12 +257,41 @@
         presetSelect.addEventListener('change', onPresetEvent);
     }
 
+    function updateDisplayNameText() {
+      // if the displayName is empty, set it to the peerID.
+      document.querySelector("#displaynameoutput").value = displayName;
+      activeConnections.forEach(c => c.send({type:'namechange', name: displayName || document.querySelector("#peerID").value}));
+    }
+
+    function onSetDisplayName() {
+      if(displayName !== document.querySelector('#displaynametext').value) {
+        displayName = document.querySelector('#displaynametext').value.trim();
+        updateDisplayNameText()
+      }
+    }
+
+    function updateConnectedNames() {
+      const listEl = document.querySelector("#connectedNamesList");
+      if(connectedDisplayNames.length == 0 || !isHost) document.querySelector("#connectedNamesPane").hidden = true;
+      else {
+        while(listEl.children.length > 0) listEl.removeChild(listEl.firstChild);
+        connectedDisplayNames.forEach(n => {
+          const liEl = document.createElement("li");
+          liEl.innerText = n;
+          listEl.append(liEl);
+        })
+        document.querySelector("#displayNamePane").hidden = true;
+        document.querySelector("#connectedNamesPane").hidden = false;
+      }
+    }
+
     setupPresets();
     onSettings(settings);
     document.querySelector('#opponentBoard').addEventListener('mouseup', onOpponentBoardEvent);
     document.querySelector('#opponentBoard').addEventListener('contextmenu', e => e.preventDefault());
     document.querySelector('#joinbutton').addEventListener('click', onJoin);
     document.querySelector('#settings_pane').addEventListener('change', onSettingsEvent);
+    document.querySelector('#displaynamebuton').addEventListener('click', onSetDisplayName);
 })()
 </script>
 </body>
